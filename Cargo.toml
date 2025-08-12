@@ -1,0 +1,18 @@
+[package]
+name = "media-codec-vpx"
+description = "Rust bindings to libvpx"
+homepage = "https://github.com/rust-media"
+repository = "https://github.com/rust-media/media-codec-vpx"
+documentation = "https://docs.rs/media-codec-vpx"
+version = "0.1.0"
+authors = ["Zhou Wei <zhouwei@ehom.net>"]
+license = "MIT OR Apache-2.0"
+categories = ["multimedia::video", "multimedia::encoding"]
+keywords = ["vpx", "vp8", "vp9", "libvpx"]
+edition = "2021"
+
+[dependencies]
+ctor = "0.5"
+media-codec = "0.1"
+media-codec-vpx-sys = { path = "sys" }
+media-core = "0.3"
