@@ -14,5 +14,5 @@ edition = "2021"
 [dependencies]
 ctor = "0.5"
 media-codec = "0.1"
-media-codec-vpx-sys = { path = "sys" }
+media-codec-vpx-sys = { version = "0.1", path = "sys" }
 media-core = "0.3"
