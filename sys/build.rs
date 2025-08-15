@@ -5,6 +5,10 @@ use bindgen::EnumVariation::Rust;
 use pkg_config::Config;
 
 fn main() {
+    if env::var("DOCS_RS").is_ok() || env::var("CARGO_DOC").is_ok() {
+        return;
+    }
+
     println!("cargo:rerun-if-changed=include/vpx.h");
 
     let libs = Config::new().atleast_version("1.15.2").probe("vpx").unwrap();
