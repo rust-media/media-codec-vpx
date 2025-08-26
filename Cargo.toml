@@ -4,7 +4,7 @@ description = "Rust bindings to libvpx"
 homepage = "https://github.com/rust-media"
 repository = "https://github.com/rust-media/media-codec-vpx"
 documentation = "https://docs.rs/media-codec-vpx"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Zhou Wei <zhouwei@ehom.net>"]
 license = "MIT OR Apache-2.0"
 categories = ["multimedia::video", "multimedia::encoding"]
@@ -13,9 +13,9 @@ edition = "2021"
 
 [dependencies]
 ctor = "0.5"
-media-codec = "0.1"
-media-codec-vpx-sys = { version = "0.1", path = "sys" }
-media-core = "0.3"
+media-codec = "0.4"
+media-codec-vpx-sys = { version = "0.2", path = "sys" }
+media-core = "0.4"
 
 [features]
 docsrs = ["media-codec-vpx-sys/docsrs"]

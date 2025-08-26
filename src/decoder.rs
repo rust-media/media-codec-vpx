@@ -94,7 +94,7 @@ impl Decoder for VPXDecoder {
         Ok(())
     }
 
-    fn receive_frame(&mut self, _parameters: Option<&CodecParameters>) -> Result<Frame<'_>> {
+    fn receive_frame_borrowed(&mut self, _parameters: Option<&CodecParameters>) -> Result<Frame<'_>> {
         let img = unsafe { vpx_sys::vpx_codec_get_frame(&mut self.ctx, &mut self.iter) };
         if img.is_null() {
             return Err(Error::Again("no frame available".to_string()));

@@ -9,12 +9,12 @@ fn main() {
         return;
     }
 
-    println!("cargo:rerun-if-changed=include/vpx.h");
+    println!("cargo:rerun-if-changed=include/wrapper.h");
 
     let libs = Config::new().atleast_version("1.15.2").probe("vpx").unwrap();
     let headers = libs.include_paths;
 
-    let mut builder = bindgen::builder().header("include/vpx.h").default_enum_style(Rust { non_exhaustive: false }).generate_comments(false);
+    let mut builder = bindgen::builder().header("include/wrapper.h").default_enum_style(Rust { non_exhaustive: false }).generate_comments(false);
 
     for header in headers {
         builder = builder.clang_arg("-I").clang_arg(header.to_str().unwrap());
