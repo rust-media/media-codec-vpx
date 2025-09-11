@@ -13,9 +13,9 @@ edition = "2021"
 
 [dependencies]
 ctor = "0.5"
-media-codec = { version = "0.5", default-features = false, features = ["video"] }
+media-codec = { version = "0.6", default-features = false, features = ["video"] }
 media-codec-vpx-sys = { version = "0.2", path = "sys" }
-media-core = { version = "0.5", default-features = false, features = ["video"] }
+media-core = { version = "0.6", default-features = false, features = ["video"] }
 
 [features]
 docsrs = ["media-codec-vpx-sys/docsrs"]
