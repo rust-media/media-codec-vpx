@@ -5,6 +5,7 @@ use media_codec::{
     codec::{Codec, CodecBuilder, CodecID},
     decoder::{register_decoder, Decoder, DecoderBuilder, VideoDecoderConfiguration, VideoDecoderParameters},
     packet::Packet,
+    CodecInfomation,
 };
 use media_codec_vpx_sys::vpx_codec_iter_t;
 use media_core::{
@@ -65,6 +66,8 @@ fn vpx_color_space_to_color_matrix(color_space: vpx_color_space) -> ColorMatrix 
 }
 
 pub struct VPXDecoder {
+    id: CodecID,
+    name: &'static str,
     ctx: vpx_codec_ctx_t,
     iter: vpx_codec_iter_t,
 }
@@ -149,11 +152,11 @@ impl Drop for VPXDecoder {
 }
 
 impl VPXDecoder {
-    pub fn new(codec_id: CodecID, _parameters: &VideoDecoderParameters, _options: Option<&Variant>) -> Result<Self> {
-        let iface = match codec_id {
-            CodecID::VP8 => unsafe { vpx_sys::vpx_codec_vp8_dx() },
-            CodecID::VP9 => unsafe { vpx_sys::vpx_codec_vp9_dx() },
-            _ => return Err(unsupported_error!(codec_id)),
+    pub fn new(id: CodecID, _parameters: &VideoDecoderParameters, _options: Option<&Variant>) -> Result<Self> {
+        let (iface, name) = match id {
+            CodecID::VP8 => (unsafe { vpx_sys::vpx_codec_vp8_dx() }, VP8_CODEC_NAME),
+            CodecID::VP9 => (unsafe { vpx_sys::vpx_codec_vp9_dx() }, VP9_CODEC_NAME),
+            _ => return Err(unsupported_error!(id)),
         };
 
         let mut ctx = MaybeUninit::uninit();
@@ -166,6 +169,8 @@ impl VPXDecoder {
         }
 
         Ok(Self {
+            id,
+            name,
             ctx: unsafe { ctx.assume_init() },
             iter: ptr::null_mut(),
         })
@@ -173,7 +178,7 @@ impl VPXDecoder {
 }
 
 pub struct VPXDecoderBuilder {
-    codec_id: CodecID,
+    id: CodecID,
     name: &'static str,
 }
 
@@ -190,7 +195,7 @@ impl DecoderBuilder<VideoDecoderConfiguration> for VPXDecoderBuilder {
 
 impl CodecBuilder<VideoDecoderConfiguration> for VPXDecoderBuilder {
     fn id(&self) -> CodecID {
-        self.codec_id
+        self.id
     }
 
     fn name(&self) -> &'static str {
@@ -198,17 +203,27 @@ impl CodecBuilder<VideoDecoderConfiguration> for VPXDecoderBuilder {
     }
 }
 
-const VP8_DECODER_NAME: &str = "vp8-dec";
-const VP9_DECODER_NAME: &str = "vp9-dec";
+impl CodecInfomation for VPXDecoder {
+    fn id(&self) -> CodecID {
+        self.id
+    }
+
+    fn name(&self) -> &'static str {
+        self.name
+    }
+}
+
+const VP8_CODEC_NAME: &str = "vp8-dec";
+const VP9_CODEC_NAME: &str = "vp9-dec";
 
 const VP8_DECODER_BUILDER: VPXDecoderBuilder = VPXDecoderBuilder {
-    codec_id: CodecID::VP8,
-    name: VP8_DECODER_NAME,
+    id: CodecID::VP8,
+    name: VP8_CODEC_NAME,
 };
 
 const VP9_DECODER_BUILDER: VPXDecoderBuilder = VPXDecoderBuilder {
-    codec_id: CodecID::VP9,
-    name: VP9_DECODER_NAME,
+    id: CodecID::VP9,
+    name: VP9_CODEC_NAME,
 };
 
 #[ctor]
