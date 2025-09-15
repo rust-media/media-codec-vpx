@@ -3,7 +3,7 @@ use std::{mem::MaybeUninit, ptr, slice, sync::Arc};
 use ctor::ctor;
 use media_codec::{
     codec::{Codec, CodecBuilder, CodecID},
-    decoder::{register_decoder, Decoder, DecoderBuilder, VideoDecoderConfiguration, VideoDecoderParameters},
+    decoder::{register_decoder, Decoder, DecoderBuilder, VideoDecoder, VideoDecoderParameters},
     packet::Packet,
     CodecInfomation,
 };
@@ -75,7 +75,7 @@ pub struct VPXDecoder {
 unsafe impl Send for VPXDecoder {}
 unsafe impl Sync for VPXDecoder {}
 
-impl Codec<VideoDecoderConfiguration> for VPXDecoder {
+impl Codec<VideoDecoder> for VPXDecoder {
     fn configure(&mut self, _parameters: Option<&VideoDecoderParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
@@ -85,8 +85,8 @@ impl Codec<VideoDecoderConfiguration> for VPXDecoder {
     }
 }
 
-impl Decoder<VideoDecoderConfiguration> for VPXDecoder {
-    fn send_packet(&mut self, _config: &VideoDecoderConfiguration, packet: &Packet) -> Result<()> {
+impl Decoder<VideoDecoder> for VPXDecoder {
+    fn send_packet(&mut self, _config: &VideoDecoder, packet: &Packet) -> Result<()> {
         let packet_data = packet.data();
         let ret = unsafe { vpx_sys::vpx_codec_decode(&mut self.ctx, packet_data.as_ptr(), packet_data.len() as u32, ptr::null_mut(), 0) };
 
@@ -99,7 +99,7 @@ impl Decoder<VideoDecoderConfiguration> for VPXDecoder {
         Ok(())
     }
 
-    fn receive_frame_borrowed(&mut self, _config: &VideoDecoderConfiguration) -> Result<Frame<'_>> {
+    fn receive_frame_borrowed(&mut self, _config: &VideoDecoder) -> Result<Frame<'_>> {
         let img = unsafe { vpx_sys::vpx_codec_get_frame(&mut self.ctx, &mut self.iter) };
         if img.is_null() {
             return Err(Error::Again("no frame available".to_string()));
@@ -132,7 +132,7 @@ impl Decoder<VideoDecoderConfiguration> for VPXDecoder {
         Ok(frame)
     }
 
-    fn flush(&mut self, _config: &VideoDecoderConfiguration) -> Result<()> {
+    fn flush(&mut self, _config: &VideoDecoder) -> Result<()> {
         let ret = unsafe { vpx_sys::vpx_codec_decode(&mut self.ctx, ptr::null(), 0, ptr::null_mut(), 0) };
 
         self.iter = ptr::null_mut();
@@ -182,18 +182,18 @@ pub struct VPXDecoderBuilder {
     name: &'static str,
 }
 
-impl DecoderBuilder<VideoDecoderConfiguration> for VPXDecoderBuilder {
+impl DecoderBuilder<VideoDecoder> for VPXDecoderBuilder {
     fn new_decoder(
         &self,
         codec_id: CodecID,
         parameters: &VideoDecoderParameters,
         options: Option<&Variant>,
-    ) -> Result<Box<dyn Decoder<VideoDecoderConfiguration>>> {
+    ) -> Result<Box<dyn Decoder<VideoDecoder>>> {
         Ok(Box::new(VPXDecoder::new(codec_id, parameters, options)?))
     }
 }
 
-impl CodecBuilder<VideoDecoderConfiguration> for VPXDecoderBuilder {
+impl CodecBuilder<VideoDecoder> for VPXDecoderBuilder {
     fn id(&self) -> CodecID {
         self.id
     }
@@ -227,7 +227,7 @@ const VP9_DECODER_BUILDER: VPXDecoderBuilder = VPXDecoderBuilder {
 };
 
 #[ctor]
-fn initialize() {
+pub fn initialize() {
     register_decoder(Arc::new(VP8_DECODER_BUILDER), false);
     register_decoder(Arc::new(VP9_DECODER_BUILDER), false);
 }
