@@ -12,10 +12,11 @@ keywords = ["vpx", "vp8", "vp9", "libvpx"]
 edition = "2021"
 
 [dependencies]
-ctor = "0.5"
+ctor = "0.6"
 media-codec = { version = "0.6.1", default-features = false, features = ["video"] }
 media-codec-vpx-sys = { version = "0.2", path = "sys" }
 media-core = { version = "0.6.1", default-features = false, features = ["video"] }
+smallvec = "1.15"
 
 [features]
 docsrs = ["media-codec-vpx-sys/docsrs"]
