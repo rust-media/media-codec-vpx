@@ -82,9 +82,9 @@ const DEFAULT_MAX_VIDEO_PLANES: usize = 4;
 
 type BufferPlaneVec = SmallVec<[(usize, u32); DEFAULT_MAX_VIDEO_PLANES]>;
 
-struct VPXImage(vpx_image_t);
+struct VpxImage(vpx_image_t);
 
-impl VPXImage {
+impl VpxImage {
     fn has_frame_buffer(&self) -> bool {
         !self.0.fb_priv.is_null()
     }
@@ -158,7 +158,7 @@ impl FrameCreator<VideoFrameDescriptor> for EmptyFrameCreator {
     }
 }
 
-pub struct VPXDecoder {
+pub struct VpxDecoder {
     id: CodecID,
     name: &'static str,
     ctx: vpx_codec_ctx_t,
@@ -167,10 +167,10 @@ pub struct VPXDecoder {
     frame_pool_initialized: AtomicBool,
 }
 
-unsafe impl Send for VPXDecoder {}
-unsafe impl Sync for VPXDecoder {}
+unsafe impl Send for VpxDecoder {}
+unsafe impl Sync for VpxDecoder {}
 
-impl Codec<VideoDecoder> for VPXDecoder {
+impl Codec<VideoDecoder> for VpxDecoder {
     fn configure(&mut self, _params: Option<&CodecParameters>, _options: Option<&Variant>) -> Result<()> {
         Ok(())
     }
@@ -180,7 +180,7 @@ impl Codec<VideoDecoder> for VPXDecoder {
     }
 }
 
-impl Decoder<VideoDecoder> for VPXDecoder {
+impl Decoder<VideoDecoder> for VpxDecoder {
     fn send_packet(&mut self, _config: &VideoDecoder, _pool: Option<&Arc<FramePool<VideoFrame<'static>>>>, packet: &Packet) -> Result<()> {
         let packet_data = packet.data();
         let ret = unsafe { vpx_sys::vpx_codec_decode(&mut self.ctx, packet_data.as_ptr(), packet_data.len() as u32, ptr::null_mut(), 0) };
@@ -275,7 +275,7 @@ unsafe extern "C" fn release_frame_buffer(_priv_: *mut c_void, fb: *mut vpx_code
     0
 }
 
-impl VPXDecoder {
+impl VpxDecoder {
     pub fn new(id: CodecID, _params: &VideoDecoderParameters, _options: Option<&Variant>) -> Result<Self> {
         let (iface, name) = match id {
             CodecID::VP8 => (unsafe { vpx_sys::vpx_codec_vp8_dx() }, VP8_CODEC_NAME),
@@ -328,7 +328,7 @@ impl VPXDecoder {
         }
     }
 
-    fn get_image(&mut self) -> Result<VPXImage> {
+    fn get_image(&mut self) -> Result<VpxImage> {
         let img = unsafe { vpx_sys::vpx_codec_get_frame(&mut self.ctx as *const _ as *mut _, &mut self.iter) };
         if img.is_null() {
             return Err(Error::Again("no frame available".into()));
@@ -336,11 +336,11 @@ impl VPXDecoder {
 
         let img = unsafe { *img };
 
-        Ok(VPXImage(img))
+        Ok(VpxImage(img))
     }
 }
 
-impl Drop for VPXDecoder {
+impl Drop for VpxDecoder {
     fn drop(&mut self) {
         unsafe {
             vpx_sys::vpx_codec_destroy(&mut self.ctx);
@@ -353,18 +353,18 @@ impl Drop for VPXDecoder {
     }
 }
 
-pub struct VPXDecoderBuilder {
+pub struct VpxDecoderBuilder {
     id: CodecID,
     name: &'static str,
 }
 
-impl DecoderBuilder<VideoDecoder> for VPXDecoderBuilder {
+impl DecoderBuilder<VideoDecoder> for VpxDecoderBuilder {
     fn new_decoder(&self, codec_id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<VideoDecoder>>> {
-        Ok(Box::new(VPXDecoder::new(codec_id, &params.try_into()?, options)?))
+        Ok(Box::new(VpxDecoder::new(codec_id, &params.try_into()?, options)?))
     }
 }
 
-impl CodecBuilder<VideoDecoder> for VPXDecoderBuilder {
+impl CodecBuilder<VideoDecoder> for VpxDecoderBuilder {
     fn id(&self) -> CodecID {
         self.id
     }
@@ -374,7 +374,7 @@ impl CodecBuilder<VideoDecoder> for VPXDecoderBuilder {
     }
 }
 
-impl CodecInformation for VPXDecoder {
+impl CodecInformation for VpxDecoder {
     fn id(&self) -> CodecID {
         self.id
     }
@@ -387,12 +387,12 @@ impl CodecInformation for VPXDecoder {
 const VP8_CODEC_NAME: &str = "vp8-dec";
 const VP9_CODEC_NAME: &str = "vp9-dec";
 
-const VP8_DECODER_BUILDER: VPXDecoderBuilder = VPXDecoderBuilder {
+const VP8_DECODER_BUILDER: VpxDecoderBuilder = VpxDecoderBuilder {
     id: CodecID::VP8,
     name: VP8_CODEC_NAME,
 };
 
-const VP9_DECODER_BUILDER: VPXDecoderBuilder = VPXDecoderBuilder {
+const VP9_DECODER_BUILDER: VpxDecoderBuilder = VpxDecoderBuilder {
     id: CodecID::VP9,
     name: VP9_CODEC_NAME,
 };
