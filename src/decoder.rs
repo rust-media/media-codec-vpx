@@ -18,12 +18,12 @@ use media_codec::{
 use media_core::{
     buffer::{Buffer, BufferPool},
     error::Error,
-    frame::{Frame, SharedFrame},
+    frame::SharedFrame,
     frame_pool::{FrameCreator, FramePool},
     unsupported_error,
     variant::Variant,
-    video::{ColorMatrix, ColorRange, PixelFormat, VideoFrameDescriptor},
-    FrameDescriptor, Result,
+    video::{ColorMatrix, ColorRange, PixelFormat, VideoFrame, VideoFrameDescriptor},
+    Result,
 };
 use smallvec::SmallVec;
 
@@ -105,20 +105,20 @@ impl VPXImage {
         Ok(desc)
     }
 
-    fn convert_to_frame(&self) -> Result<Frame<'_>> {
+    fn convert_to_frame(&self) -> Result<VideoFrame<'_>> {
         let img = &self.0;
         let desc = self.descriptor()?;
         let planes_num = desc.format.components() as usize;
         let mut buffers = SmallVec::<[(&[u8], u32); DEFAULT_MAX_VIDEO_PLANES]>::with_capacity(planes_num);
 
         for plane in 0..planes_num {
-            let height = desc.format.calc_plane_height(plane, desc.height.get()) as usize;
+            let height = desc.format.calc_plane_height(plane, desc.height().get()) as usize;
             let stride = img.stride[plane] as usize;
             let buffer = unsafe { slice::from_raw_parts(img.planes[plane], stride * height) };
             buffers.push((buffer, stride as u32));
         }
 
-        let frame = Frame::video_creator().create_from_buffers_with_descriptor(desc, &buffers)?;
+        let frame = VideoFrame::from_buffers_with_descriptor(desc, &buffers)?;
 
         Ok(frame)
     }
@@ -152,9 +152,9 @@ impl VPXImage {
 
 struct EmptyFrameCreator;
 
-impl FrameCreator for EmptyFrameCreator {
-    fn create_frame(&self, desc: FrameDescriptor) -> Result<Frame<'static>> {
-        Frame::video_creator().create_empty_with_descriptor(desc.try_into()?)
+impl FrameCreator<VideoFrameDescriptor> for EmptyFrameCreator {
+    fn create_frame(&self, desc: VideoFrameDescriptor) -> Result<VideoFrame<'static>> {
+        VideoFrame::new_empty_with_descriptor(desc)
     }
 }
 
@@ -181,7 +181,7 @@ impl Codec<VideoDecoder> for VPXDecoder {
 }
 
 impl Decoder<VideoDecoder> for VPXDecoder {
-    fn send_packet(&mut self, _config: &VideoDecoder, _pool: Option<&Arc<FramePool<Frame<'static>>>>, packet: Packet) -> Result<()> {
+    fn send_packet(&mut self, _config: &VideoDecoder, _pool: Option<&Arc<FramePool<VideoFrame<'static>>>>, packet: Packet) -> Result<()> {
         let packet_data = packet.data();
         let ret = unsafe { vpx_sys::vpx_codec_decode(&mut self.ctx, packet_data.as_ptr(), packet_data.len() as u32, ptr::null_mut(), 0) };
 
@@ -194,52 +194,45 @@ impl Decoder<VideoDecoder> for VPXDecoder {
         Ok(())
     }
 
-    fn receive_frame(&mut self, _config: &VideoDecoder, pool: Option<&Arc<FramePool<Frame<'static>>>>) -> Result<SharedFrame<Frame<'static>>> {
+    fn receive_frame(
+        &mut self,
+        _config: &VideoDecoder,
+        pool: Option<&Arc<FramePool<VideoFrame<'static>>>>,
+    ) -> Result<SharedFrame<VideoFrame<'static>>> {
         let img = &self.get_image()?;
 
         let pool = if let Some(pool) = pool {
             pool
         } else {
             if !img.has_frame_buffer() {
-                return img.convert_to_frame().map(SharedFrame::<Frame<'static>>::new);
+                return img.convert_to_frame().map(SharedFrame::<VideoFrame<'static>>::new);
             }
 
             let (buffer, buffer_planes, desc) = img.convert_to_buffer()?;
-            let frame = Frame::video_creator().create_from_shared_buffer_with_descriptor(desc, buffer, &buffer_planes)?;
-
-            return Ok(SharedFrame::<Frame<'static>>::new(frame));
+            let frame = VideoFrame::from_shared_buffer_with_descriptor(desc, buffer, &buffer_planes)?;
+            return Ok(SharedFrame::<VideoFrame<'static>>::new(frame));
         };
 
         if !img.has_frame_buffer() {
             let desc = img.descriptor()?;
 
-            if !self.frame_pool_initialized.load(Ordering::Relaxed) {
-                pool.configure(Some(desc.clone().into()), None);
-                self.frame_pool_initialized.store(true, Ordering::Relaxed);
-            }
+            self.init_pool(&desc, pool, None);
 
             let frame = img.convert_to_frame()?;
-            let mut pooled_frame = pool.get_frame_with_descriptor(desc.into())?;
+            let mut pooled_frame = pool.get_frame_with_descriptor(desc)?;
             frame.convert_to(pooled_frame.write().unwrap())?;
 
             Ok(pooled_frame)
         } else {
             let (buffer, buffer_planes, desc) = img.convert_to_buffer()?;
 
-            if !self.frame_pool_initialized.load(Ordering::Relaxed) {
-                pool.configure(Some(desc.clone().into()), Some(Box::new(EmptyFrameCreator)));
-                self.frame_pool_initialized.store(true, Ordering::Relaxed);
-            }
+            self.init_pool(&desc, pool, Some(Box::new(EmptyFrameCreator)));
 
-            let mut pooled_frame = pool.get_frame_with_descriptor(desc.clone().into())?;
-            pooled_frame.write().unwrap().attach_video_shared_buffer_with_descriptor(desc, buffer, &buffer_planes)?;
+            let mut pooled_frame = pool.get_frame_with_descriptor(desc.clone())?;
+            pooled_frame.write().unwrap().attach_shared_buffer_with_descriptor(desc, buffer, &buffer_planes)?;
 
             Ok(pooled_frame)
         }
-    }
-
-    fn receive_frame_borrowed(&mut self, _config: &VideoDecoder) -> Result<Frame<'_>> {
-        Err(unsupported_error!("borrowed frame"))
     }
 
     fn flush(&mut self, _config: &VideoDecoder) -> Result<()> {
@@ -321,6 +314,18 @@ impl VPXDecoder {
             buffer_pool_ptr: pool_ptr,
             frame_pool_initialized: AtomicBool::new(false),
         })
+    }
+
+    fn init_pool(
+        &self,
+        desc: &VideoFrameDescriptor,
+        pool: &Arc<FramePool<VideoFrame<'static>>>,
+        creator: Option<Box<dyn FrameCreator<VideoFrameDescriptor>>>,
+    ) {
+        if !self.frame_pool_initialized.load(Ordering::Relaxed) {
+            pool.configure(Some(desc.clone()), creator);
+            self.frame_pool_initialized.store(true, Ordering::Relaxed);
+        }
     }
 
     fn get_image(&mut self) -> Result<VPXImage> {
