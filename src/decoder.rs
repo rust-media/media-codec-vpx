@@ -136,7 +136,7 @@ impl VPXImage {
 
             if offset >= buffer.len() {
                 let _ = Arc::into_raw(buffer);
-                return Err(Error::Invalid("invalid frame buffer offset".to_string()));
+                return Err(Error::Invalid("invalid frame buffer offset".into()));
             }
 
             let stride = img.stride[plane] as usize;
@@ -181,7 +181,7 @@ impl Codec<VideoDecoder> for VPXDecoder {
 }
 
 impl Decoder<VideoDecoder> for VPXDecoder {
-    fn send_packet(&mut self, _config: &VideoDecoder, _pool: Option<&Arc<FramePool<VideoFrame<'static>>>>, packet: Packet) -> Result<()> {
+    fn send_packet(&mut self, _config: &VideoDecoder, _pool: Option<&Arc<FramePool<VideoFrame<'static>>>>, packet: &Packet) -> Result<()> {
         let packet_data = packet.data();
         let ret = unsafe { vpx_sys::vpx_codec_decode(&mut self.ctx, packet_data.as_ptr(), packet_data.len() as u32, ptr::null_mut(), 0) };
 
@@ -331,7 +331,7 @@ impl VPXDecoder {
     fn get_image(&mut self) -> Result<VPXImage> {
         let img = unsafe { vpx_sys::vpx_codec_get_frame(&mut self.ctx as *const _ as *mut _, &mut self.iter) };
         if img.is_null() {
-            return Err(Error::Again("no frame available".to_string()));
+            return Err(Error::Again("no frame available".into()));
         }
 
         let img = unsafe { *img };
