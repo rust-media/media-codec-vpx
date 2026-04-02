@@ -10,10 +10,9 @@ use std::{
 
 use ctor::ctor;
 use media_codec::{
-    codec::{Codec, CodecBuilder, CodecID},
     decoder::{register_decoder, Decoder, DecoderBuilder, VideoDecoder, VideoDecoderParameters},
     packet::Packet,
-    CodecInformation, CodecParameters,
+    Codec, CodecBuilder, CodecID, CodecInformation, CodecParameters,
 };
 use media_core::{
     buffer::{Buffer, BufferPool},
@@ -34,6 +33,8 @@ use crate::{
         vpx_image_t, vpx_img_fmt, VPX_DECODER_ABI_VERSION,
     },
 };
+
+const CODEC_NAME: &str = "vpx";
 
 fn vpx_img_fmt_to_pixel_format(fmt: vpx_img_fmt, depth: u32) -> Option<PixelFormat> {
     use vpx_img_fmt::*;
@@ -160,7 +161,6 @@ impl FrameCreator<VideoFrameDescriptor> for EmptyFrameCreator {
 
 pub struct VpxDecoder {
     id: CodecID,
-    name: &'static str,
     ctx: vpx_codec_ctx_t,
     iter: vpx_codec_iter_t,
     buffer_pool_ptr: *const BufferPool,
@@ -169,6 +169,16 @@ pub struct VpxDecoder {
 
 unsafe impl Send for VpxDecoder {}
 unsafe impl Sync for VpxDecoder {}
+
+impl CodecInformation for VpxDecoder {
+    fn id(&self) -> CodecID {
+        self.id
+    }
+
+    fn name(&self) -> &'static str {
+        CODEC_NAME
+    }
+}
 
 impl Codec<VideoDecoder> for VpxDecoder {
     fn configure(&mut self, _params: Option<&CodecParameters>, _options: Option<&Variant>) -> Result<()> {
@@ -277,9 +287,9 @@ unsafe extern "C" fn release_frame_buffer(_priv_: *mut c_void, fb: *mut vpx_code
 
 impl VpxDecoder {
     pub fn new(id: CodecID, _params: &VideoDecoderParameters, _options: Option<&Variant>) -> Result<Self> {
-        let (iface, name) = match id {
-            CodecID::VP8 => (unsafe { vpx_sys::vpx_codec_vp8_dx() }, VP8_CODEC_NAME),
-            CodecID::VP9 => (unsafe { vpx_sys::vpx_codec_vp9_dx() }, VP9_CODEC_NAME),
+        let iface = match id {
+            CodecID::VP8 => unsafe { vpx_sys::vpx_codec_vp8_dx() },
+            CodecID::VP9 => unsafe { vpx_sys::vpx_codec_vp9_dx() },
             _ => return Err(unsupported_error!(id)),
         };
 
@@ -308,7 +318,6 @@ impl VpxDecoder {
 
         Ok(Self {
             id,
-            name,
             ctx: unsafe { ctx.assume_init() },
             iter: ptr::null_mut(),
             buffer_pool_ptr: pool_ptr,
@@ -353,10 +362,7 @@ impl Drop for VpxDecoder {
     }
 }
 
-pub struct VpxDecoderBuilder {
-    id: CodecID,
-    name: &'static str,
-}
+pub struct VpxDecoderBuilder;
 
 impl DecoderBuilder<VideoDecoder> for VpxDecoderBuilder {
     fn new_decoder(&self, codec_id: CodecID, params: &CodecParameters, options: Option<&Variant>) -> Result<Box<dyn Decoder<VideoDecoder>>> {
@@ -365,40 +371,16 @@ impl DecoderBuilder<VideoDecoder> for VpxDecoderBuilder {
 }
 
 impl CodecBuilder<VideoDecoder> for VpxDecoderBuilder {
-    fn id(&self) -> CodecID {
-        self.id
+    fn ids(&self) -> &[CodecID] {
+        &[CodecID::VP8, CodecID::VP9]
     }
 
     fn name(&self) -> &'static str {
-        self.name
+        CODEC_NAME
     }
 }
-
-impl CodecInformation for VpxDecoder {
-    fn id(&self) -> CodecID {
-        self.id
-    }
-
-    fn name(&self) -> &'static str {
-        self.name
-    }
-}
-
-const VP8_CODEC_NAME: &str = "vp8-dec";
-const VP9_CODEC_NAME: &str = "vp9-dec";
-
-const VP8_DECODER_BUILDER: VpxDecoderBuilder = VpxDecoderBuilder {
-    id: CodecID::VP8,
-    name: VP8_CODEC_NAME,
-};
-
-const VP9_DECODER_BUILDER: VpxDecoderBuilder = VpxDecoderBuilder {
-    id: CodecID::VP9,
-    name: VP9_CODEC_NAME,
-};
 
 #[ctor]
 pub fn initialize() {
-    register_decoder(Arc::new(VP8_DECODER_BUILDER), false);
-    register_decoder(Arc::new(VP9_DECODER_BUILDER), false);
+    register_decoder(Arc::new(VpxDecoderBuilder), false);
 }
